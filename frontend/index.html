@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>手机屏幕商城</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="logo">屏幕仓</div>
+      <nav>
+        <a href="#products">产品</a>
+        <a href="#cart">购物车</a>
+        <a href="#order">下单</a>
+      </nav>
+    </header>
+
+    <section class="hero">
+      <div>
+        <p class="eyebrow">专业手机屏幕供应</p>
+        <h1>原装品质，快速发货</h1>
+        <p class="subhead">
+          覆盖苹果 / 华为 / 小米 / 三星等主流机型，提供批发零售，支持开发票与售后咨询。
+        </p>
+        <div class="hero-actions">
+          <a class="btn primary" href="#products">查看现货</a>
+          <a class="btn ghost" href="#order">提交采购需求</a>
+        </div>
+        <ul class="badges">
+          <li>品质质检</li>
+          <li>48h 内发货</li>
+          <li>一件代发</li>
+        </ul>
+      </div>
+      <img src="https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=900&q=80" alt="手机屏幕" />
+    </section>
+
+    <main>
+      <section id="products" class="panel">
+        <div class="panel-header">
+          <div>
+            <p class="eyebrow">现货列表</p>
+            <h2>精选屏幕组件</h2>
+          </div>
+          <button class="btn ghost" id="refresh-btn">刷新库存</button>
+        </div>
+        <div id="product-grid" class="grid"></div>
+      </section>
+
+      <section id="cart" class="panel">
+        <div class="panel-header">
+          <div>
+            <p class="eyebrow">购物车</p>
+            <h2>查看待购商品</h2>
+          </div>
+          <button class="btn ghost" id="clear-cart-btn">清空</button>
+        </div>
+        <div id="cart-list" class="cart-list"></div>
+        <div class="cart-summary">
+          <div>
+            <p>商品数：<span id="cart-count">0</span></p>
+            <p>总金额：¥ <span id="cart-total">0.00</span></p>
+          </div>
+          <a class="btn primary" href="#order">去下单</a>
+        </div>
+      </section>
+
+      <section id="order" class="panel">
+        <div class="panel-header">
+          <div>
+            <p class="eyebrow">下单信息</p>
+            <h2>提交订单</h2>
+          </div>
+        </div>
+        <form id="order-form" class="order-form">
+          <div class="field">
+            <label>联系人</label>
+            <input type="text" name="customerName" required placeholder="张先生 / 李小姐" />
+          </div>
+          <div class="field">
+            <label>联系电话</label>
+            <input type="tel" name="phone" required placeholder="手机或座机" />
+          </div>
+          <div class="field">
+            <label>收货地址</label>
+            <input type="text" name="address" required placeholder="省市区 + 详细地址" />
+          </div>
+          <button type="submit" class="btn primary" id="submit-order-btn">提交订单</button>
+          <p class="note">提交后客服将在 30 分钟内与您确认库存与发货信息。</p>
+        </form>
+      </section>
+    </main>
+
+    <div id="toast" class="toast"></div>
+    <script src="./app.js" type="module"></script>
+  </body>
+</html>
+
