@@ -12,14 +12,28 @@ const __dirname = path.dirname(__filename);
 const app = express();
 
 const PORT = process.env.PORT || 3001;
-const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'cNODE_ENV';
+const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'changeme-admin-token';
 
 app.use(cors());
 app.use(express.json());
 
 // Serve frontend assets (built or static) if present
 const staticDir = path.join(__dirname, '..', '..', 'frontend');
-app.use(express.static(staticDir));
+
+// 明确设置静态文件处理，确保 admin.html 可访问
+app.use(express.static(staticDir, {
+  extensions: ['html'],
+  index: 'index.html'
+}));
+
+// 专门处理 admin.html 路由
+app.get('/admin.html', (_req, res) => {
+  res.sendFile(path.join(staticDir, 'admin.html'));
+});
+
+app.get('/admin', (_req, res) => {
+  res.sendFile(path.join(staticDir, 'admin.html'));
+});
 
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok' });
