@@ -8,7 +8,15 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const dbPath = path.join(__dirname, '..', 'data.sqlite');
 
+// 使用序列化模式确保并发安全
 export const db = new sqlite3.Database(dbPath);
+
+// 设置 WAL 模式提高并发性能
+db.run('PRAGMA journal_mode = WAL;');
+db.run('PRAGMA busy_timeout = 5000;');
+
+// 请求队列，确保事务顺序执行
+let transactionQueue = Promise.resolve();
 
 const runAsync = (sql, params = []) =>
   new Promise((resolve, reject) => {
@@ -34,6 +42,23 @@ const allAsync = (sql, params = []) =>
     });
   });
 
+// 串行化事务执行，防止并发冲突
+const runTransaction = async (fn) => {
+  return new Promise((resolve, reject) => {
+    transactionQueue = transactionQueue.then(async () => {
+      try {
+        await runAsync('BEGIN IMMEDIATE TRANSACTION');
+        const result = await fn();
+        await runAsync('COMMIT');
+        resolve(result);
+      } catch (err) {
+        await runAsync('ROLLBACK').catch(() => {});
+        reject(err);
+      }
+    });
+  });
+};
+
 export const initDb = async () => {
   await runAsync('PRAGMA foreign_keys = ON;');
   await runAsync(`
@@ -54,6 +79,7 @@ export const initDb = async () => {
       phone TEXT NOT NULL,
       address TEXT NOT NULL,
       total REAL NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     )
   `);
@@ -111,6 +137,6 @@ export const initDb = async () => {
     }
   }
 };
-
+, runTransaction
 export const queries = { runAsync, getAsync, allAsync };
 

@@ -106,41 +106,47 @@ app.post('/api/orders', async (req, res) => {
   }
 
   try {
-    await queries.runAsync('BEGIN TRANSACTION');
+    // 使用事务队列确保并发安全
+    const result = await queries.runTransaction(async () => {
+      let total = 0;
+      const orderItems = [];
 
-    let total = 0;
-    for (const item of items) {
-      const product = await queries.getAsync('SELECT * FROM products WHERE id = ?', [item.productId]);
-      if (!product) {
-        throw new Error(`产品 ${item.productId} 不存在`);
+      // 验证库存并锁定价格
+      for (const item of items) {
+        const product = await queries.getAsync('SELECT * FROM products WHERE id = ?', [item.productId]);
+        if (!product) {
+          throw new Error(`产品 ${item.productId} 不存在`);
+        }
+        if (product.stock < item.quantity) {
+          throw new Error(`${product.name} 库存不足（剩余 ${product.stock}）`);
+        }
+        total += product.price * item.quantity;
+        orderItems.push({ product, quantity: item.quantity });
       }
-      if (product.stock < item.quantity) {
-        throw new Error(`${product.name} 库存不足`);
+
+      // 创建订单
+      const orderResult = await queries.runAsync(
+        'INSERT INTO orders (customer_name, phone, address, total, status) VALUES (?, ?, ?, ?, ?)',
+        [customerName, phone, address, total, 'pending']
+      );
+
+      // 创建订单项并扣减库存
+      for (const { product, quantity } of orderItems) {
+        await queries.runAsync(
+          'INSERT INTO order_items (order_id, product_id, quantity, unit_price) VALUES (?, ?, ?, ?)',
+          [orderResult.lastID, product.id, quantity, product.price]
+        );
+        await queries.runAsync(
+          'UPDATE products SET stock = stock - ? WHERE id = ?',
+          [quantity, product.id]
+        );
       }
-      total += product.price * item.quantity;
-    }
 
-    const orderResult = await queries.runAsync(
-      'INSERT INTO orders (customer_name, phone, address, total) VALUES (?, ?, ?, ?)',
-      [customerName, phone, address, total]
-    );
+      return { orderId: orderResult.lastID, total };
+    });
 
-    for (const item of items) {
-      const product = await queries.getAsync('SELECT * FROM products WHERE id = ?', [item.productId]);
-      await queries.runAsync(
-        'INSERT INTO order_items (order_id, product_id, quantity, unit_price) VALUES (?, ?, ?, ?)',
-        [orderResult.lastID, product.id, item.quantity, product.price]
-      );
-      await queries.runAsync(
-        'UPDATE products SET stock = stock - ? WHERE id = ?',
-        [item.quantity, product.id]
-      );
-    }
-
-    await queries.runAsync('COMMIT');
-    res.status(201).json({ message: '下单成功', orderId: orderResult.lastID, total });
+    res.status(201).json({ message: '下单成功', orderId: result.orderId, total: result.total });
   } catch (err) {
-    await queries.runAsync('ROLLBACK').catch(() => {});
     res.status(400).json({ message: err.message || '创建订单失败' });
   }
 });
@@ -151,6 +157,77 @@ app.get('/api/orders', requireAdmin, async (_req, res) => {
     res.json(orders);
   } catch (err) {
     res.status(500).json({ message: '获取订单失败', error: err.message });
+  }
+});
+
+// 获取单个订单详情（包含订单项）
+app.get('/api/orders/:id', requireAdmin, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const order = await queries.getAsync('SELECT * FROM orders WHERE id = ?', [id]);
+    if (!order) return res.status(404).json({ message: '订单不存在' });
+    
+    const items = await queries.allAsync(`
+      SELECT oi.*, p.name as product_name 
+      FROM order_items oi 
+      LEFT JOIN products p ON oi.product_id = p.id 
+      WHERE oi.order_id = ?
+    `, [id]);
+    
+    res.json({ ...order, items });
+  } catch (err) {
+    res.status(500).json({ message: '获取订单详情失败', error: err.message });
+  }
+});
+
+// 更新订单状态
+app.put('/api/orders/:id', requireAdmin, async (req, res) => {
+  const { id } = req.params;
+  const { status, customerName, phone, address } = req.body || {};
+  try {
+    const existing = await queries.getAsync('SELECT * FROM orders WHERE id = ?', [id]);
+    if (!existing) return res.status(404).json({ message: '订单不存在' });
+
+    await queries.runAsync(
+      `UPDATE orders SET status = ?, customer_name = ?, phone = ?, address = ? WHERE id = ?`,
+      [
+        status ?? existing.status,
+        customerName ?? existing.customer_name,
+        phone ?? existing.phone,
+        address ?? existing.address,
+        id
+      ]
+    );
+    const updated = await queries.getAsync('SELECT * FROM orders WHERE id = ?', [id]);
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ message: '更新订单失败', error: err.message });
+  }
+});
+
+// 删除订单
+app.delete('/api/orders/:id', requireAdmin, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const existing = await queries.getAsync('SELECT * FROM orders WHERE id = ?', [id]);
+    if (!existing) return res.status(404).json({ message: '订单不存在' });
+
+    // 恢复库存
+    if (existing.status !== 'cancelled') {
+      const items = await queries.allAsync('SELECT * FROM order_items WHERE order_id = ?', [id]);
+      for (const item of items) {
+        await queries.runAsync(
+          'UPDATE products SET stock = stock + ? WHERE id = ?',
+          [item.quantity, item.product_id]
+        );
+      }
+    }
+
+    await queries.runAsync('DELETE FROM order_items WHERE order_id = ?', [id]);
+    await queries.runAsync('DELETE FROM orders WHERE id = ?', [id]);
+    res.json({ message: '订单已删除' });
+  } catch (err) {
+    res.status(500).json({ message: '删除订单失败', error: err.message });
   }
 });
 
