@@ -114,9 +114,15 @@ app.delete('/api/products/:id', requireAdmin, async (req, res) => {
 });
 
 app.post('/api/orders', async (req, res) => {
-  const { customerName, phone, address, items } = req.body || {};
+  const { customerName, phone, address, items, remark = '', paymentMethod = 'wechat' } = req.body || {};
   if (!customerName || !phone || !address || !Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ message: '订单信息不完整' });
+  }
+
+  // 验证支付方式
+  const validPaymentMethods = ['wechat', 'alipay', 'bank', 'cod'];
+  if (!validPaymentMethods.includes(paymentMethod)) {
+    return res.status(400).json({ message: '无效的支付方式' });
   }
 
   try {
@@ -140,8 +146,8 @@ app.post('/api/orders', async (req, res) => {
 
       // 创建订单
       const orderResult = await queries.runAsync(
-        'INSERT INTO orders (customer_name, phone, address, total, status) VALUES (?, ?, ?, ?, ?)',
-        [customerName, phone, address, total, 'pending']
+        'INSERT INTO orders (customer_name, phone, address, total, status, remark, payment_method) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [customerName, phone, address, total, 'pending', remark, paymentMethod]
       );
 
       // 创建订单项并扣减库存
@@ -197,18 +203,19 @@ app.get('/api/orders/:id', requireAdmin, async (req, res) => {
 // 更新订单状态
 app.put('/api/orders/:id', requireAdmin, async (req, res) => {
   const { id } = req.params;
-  const { status, customerName, phone, address } = req.body || {};
+  const { status, customerName, phone, address, paymentMethod } = req.body || {};
   try {
     const existing = await queries.getAsync('SELECT * FROM orders WHERE id = ?', [id]);
     if (!existing) return res.status(404).json({ message: '订单不存在' });
 
     await queries.runAsync(
-      `UPDATE orders SET status = ?, customer_name = ?, phone = ?, address = ? WHERE id = ?`,
+      `UPDATE orders SET status = ?, customer_name = ?, phone = ?, address = ?, payment_method = ? WHERE id = ?`,
       [
         status ?? existing.status,
         customerName ?? existing.customer_name,
         phone ?? existing.phone,
         address ?? existing.address,
+        paymentMethod ?? existing.payment_method,
         id
       ]
     );

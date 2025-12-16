@@ -321,6 +321,25 @@
           <option value="cancelled">已取消</option>
         </select>
       </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>支付方式</label>
+          <select id="orderPaymentMethod">
+            <option value="wechat">微信支付</option>
+            <option value="alipay">支付宝</option>
+            <option value="bank">银行转账</option>
+            <option value="cod">货到付款</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>订单金额</label>
+          <input type="text" id="orderTotal" readonly style="background: rgba(255,255,255,0.02); color: #9ca3af;" />
+        </div>
+      </div>
+      <div class="form-group">
+        <label>客户备注</label>
+        <textarea id="orderRemark" readonly style="background: rgba(255,255,255,0.02); color: #9ca3af;"></textarea>
+      </div>
       <div id="orderItemsDetail" class="order-items"></div>
       <div class="modal-actions">
         <button class="btn btn-secondary" onclick="closeOrderModal()">取消</button>
@@ -418,15 +437,23 @@
           return;
         }
 
-        let html = `<table><thead><tr><th>订单号</th><th>客户</th><th>电话</th><th>地址</th><th>金额</th><th>状态</th><th>时间</th><th>操作</th></tr></thead><tbody>`;
+        const paymentMethodMap = {
+          wechat: '💚 微信支付',
+          alipay: '🔵 支付宝',
+          bank: '🏦 银行转账',
+          cod: '📦 货到付款'
+        };
+        let html = `<table><thead><tr><th>订单号</th><th>客户</th><th>电话</th><th>地址</th><th>金额</th><th>支付方式</th><th>状态</th><th>时间</th><th>操作</th></tr></thead><tbody>`;
         orders.forEach(order => {
           const status = statusMap[order.status] || statusMap.pending;
+          const paymentMethod = paymentMethodMap[order.payment_method] || '未知';
           html += `<tr>
             <td><strong>#${order.id}</strong></td>
             <td>${order.customer_name}</td>
             <td><a href="tel:${order.phone}" style="color:#60a5fa">${order.phone}</a></td>
-            <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis">${order.address}</td>
+            <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis">${order.address}</td>
             <td style="color:#a5b4fc;font-weight:600">¥${order.total.toFixed(2)}</td>
+            <td style="font-size:12px">${paymentMethod}</td>
             <td><span class="status ${status.class}">${status.text}</span></td>
             <td style="font-size:12px;color:#9ca3af">${new Date(order.created_at).toLocaleString('zh-CN')}</td>
             <td class="actions-cell">
@@ -450,6 +477,9 @@
         document.getElementById('orderPhone').value = order.phone;
         document.getElementById('orderAddress').value = order.address;
         document.getElementById('orderStatus').value = order.status || 'pending';
+        document.getElementById('orderPaymentMethod').value = order.payment_method || 'wechat';
+        document.getElementById('orderTotal').value = '¥' + order.total.toFixed(2);
+        document.getElementById('orderRemark').value = order.remark || '（无备注）';
 
         let itemsHtml = '<h4>订单商品</h4>';
         if (order.items && order.items.length) {
@@ -469,7 +499,8 @@
         customerName: document.getElementById('orderCustomerName').value,
         phone: document.getElementById('orderPhone').value,
         address: document.getElementById('orderAddress').value,
-        status: document.getElementById('orderStatus').value
+        status: document.getElementById('orderStatus').value,
+        paymentMethod: document.getElementById('orderPaymentMethod').value
       };
       try {
         const res = await fetch(`${API_BASE}/api/orders/${id}`, {

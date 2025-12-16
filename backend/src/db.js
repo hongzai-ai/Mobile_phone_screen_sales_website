@@ -80,6 +80,8 @@ export const initDb = async () => {
       address TEXT NOT NULL,
       total REAL NOT NULL,
       status TEXT NOT NULL DEFAULT 'pending',
+      remark TEXT DEFAULT '',
+      payment_method TEXT DEFAULT 'wechat',
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     )
   `);
@@ -136,7 +138,18 @@ export const initDb = async () => {
       );
     }
   }
-};
-, runTransaction
-export const queries = { runAsync, getAsync, allAsync };
 
+  // 迁移：为现有表添加新字段（如果不存在）
+  try {
+    await runAsync('ALTER TABLE orders ADD COLUMN remark TEXT DEFAULT ""');
+  } catch (e) {
+    // 字段已存在，忽略
+  }
+  try {
+    await runAsync('ALTER TABLE orders ADD COLUMN payment_method TEXT DEFAULT "wechat"');
+  } catch (e) {
+    // 字段已存在，忽略
+  }
+};
+
+export const queries = { runAsync, getAsync, allAsync, runTransaction };
