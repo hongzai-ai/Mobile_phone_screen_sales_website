@@ -2,7 +2,9 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
+import multer from 'multer';
 import { db, initDb, queries } from './db.js';
 
 dotenv.config();
@@ -13,6 +15,37 @@ const app = express();
 
 const PORT = process.env.PORT || 3001;
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'changeme-admin-token';
+
+// 确保上传目录存在
+const uploadsDir = path.join(__dirname, '..', 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
+// 配置 multer 文件上传
+const storage = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    cb(null, uploadsDir);
+  },
+  filename: (_req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const ext = path.extname(file.originalname);
+    cb(null, 'product-' + uniqueSuffix + ext);
+  }
+});
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 最大 5MB
+  fileFilter: (_req, file, cb) => {
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('只支持 JPG, PNG, GIF, WebP 格式的图片'));
+    }
+  }
+});
 
 app.use(cors());
 app.use(express.json());
@@ -25,6 +58,9 @@ app.use(express.static(staticDir, {
   extensions: ['html'],
   index: 'index.html'
 }));
+
+// 提供上传图片的静态访问
+app.use('/uploads', express.static(uploadsDir));
 
 // 专门处理 admin.html 路由
 app.get('/admin.html', (_req, res) => {
@@ -39,15 +75,7 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok' });
 });
 
-app.get('/api/products', async (_req, res) => {
-  try {
-    const products = await queries.allAsync('SELECT * FROM products ORDER BY id DESC');
-    res.json(products);
-  } catch (err) {
-    res.status(500).json({ message: '无法获取产品列表', error: err.message });
-  }
-});
-
+// 管理员认证中间件
 const requireAdmin = (req, res, next) => {
   const auth = req.headers.authorization || '';
   const token = auth.replace('Bearer ', '');
@@ -56,6 +84,56 @@ const requireAdmin = (req, res, next) => {
   }
   return next();
 };
+
+// 图片上传接口
+app.post('/api/upload', requireAdmin, upload.single('image'), (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: '请选择要上传的图片' });
+    }
+    // 返回可访问的 URL
+    const imageUrl = `/uploads/${req.file.filename}`;
+    res.json({ 
+      success: true, 
+      url: imageUrl,
+      filename: req.file.filename,
+      size: req.file.size
+    });
+  } catch (err) {
+    res.status(500).json({ message: '上传失败', error: err.message });
+  }
+});
+
+// 删除图片接口
+app.delete('/api/upload/:filename', requireAdmin, (req, res) => {
+  try {
+    const filename = req.params.filename;
+    const filePath = path.join(uploadsDir, filename);
+    
+    // 安全检查：确保文件在 uploads 目录内
+    if (!filePath.startsWith(uploadsDir)) {
+      return res.status(403).json({ message: '无权访问' });
+    }
+    
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+      res.json({ success: true, message: '图片已删除' });
+    } else {
+      res.status(404).json({ message: '图片不存在' });
+    }
+  } catch (err) {
+    res.status(500).json({ message: '删除失败', error: err.message });
+  }
+});
+
+app.get('/api/products', async (_req, res) => {
+  try {
+    const products = await queries.allAsync('SELECT * FROM products ORDER BY id DESC');
+    res.json(products);
+  } catch (err) {
+    res.status(500).json({ message: '无法获取产品列表', error: err.message });
+  }
+});
 
 app.post('/api/products', requireAdmin, async (req, res) => {
   const { name, description = '', price, stock = 0, image = '' } = req.body || {};

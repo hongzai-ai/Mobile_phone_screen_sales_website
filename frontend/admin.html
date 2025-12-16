@@ -195,6 +195,90 @@
     }
     .order-item-row:last-child { border-bottom: none; }
 
+    /* 图片上传区域 */
+    .image-upload-area {
+      border: 2px dashed rgba(255, 255, 255, 0.2);
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.3s;
+      background: rgba(255, 255, 255, 0.02);
+    }
+    .image-upload-area:hover {
+      border-color: #3b82f6;
+      background: rgba(59, 130, 246, 0.1);
+    }
+    .image-upload-area.dragover {
+      border-color: #22c55e;
+      background: rgba(34, 197, 94, 0.1);
+    }
+    .image-upload-area .upload-icon {
+      font-size: 40px;
+      margin-bottom: 12px;
+    }
+    .image-upload-area .upload-text {
+      color: #9ca3af;
+      font-size: 14px;
+    }
+    .image-upload-area .upload-hint {
+      color: #6b7280;
+      font-size: 12px;
+      margin-top: 8px;
+    }
+    .image-preview-container {
+      position: relative;
+      display: inline-block;
+      margin-top: 12px;
+    }
+    .image-preview {
+      max-width: 200px;
+      max-height: 150px;
+      border-radius: 8px;
+      object-fit: cover;
+    }
+    .image-remove-btn {
+      position: absolute;
+      top: -8px;
+      right: -8px;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: #ef4444;
+      color: #fff;
+      border: none;
+      cursor: pointer;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .upload-progress {
+      margin-top: 12px;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .upload-progress-bar {
+      height: 100%;
+      background: linear-gradient(135deg, #3b82f6, #22c55e);
+      transition: width 0.3s;
+    }
+    .image-url-input {
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .image-url-input summary {
+      cursor: pointer;
+      color: #9ca3af;
+      font-size: 13px;
+    }
+    .image-url-input summary:hover {
+      color: #fff;
+    }
+
     @media (max-width: 768px) {
       table { font-size: 13px; }
       th, td { padding: 8px 4px; }
@@ -279,8 +363,27 @@
           <input type="number" id="productStock" placeholder="0" />
         </div>
         <div class="form-group">
-          <label>图片 URL</label>
-          <input type="text" id="productImage" placeholder="https://..." />
+          <label>产品图片</label>
+          <div class="image-upload-area" id="imageUploadArea" onclick="triggerFileInput()">
+            <div id="uploadPlaceholder">
+              <div class="upload-icon">📷</div>
+              <div class="upload-text">点击或拖拽上传图片</div>
+              <div class="upload-hint">支持 JPG, PNG, GIF, WebP (最大 5MB)</div>
+            </div>
+            <div id="imagePreviewContainer" class="image-preview-container" style="display:none;">
+              <img id="imagePreview" class="image-preview" />
+              <button type="button" class="image-remove-btn" onclick="event.stopPropagation(); removeImage()">×</button>
+            </div>
+            <div id="uploadProgress" class="upload-progress" style="display:none;">
+              <div id="uploadProgressBar" class="upload-progress-bar" style="width:0%"></div>
+            </div>
+          </div>
+          <input type="file" id="imageFile" accept="image/*" style="display:none" onchange="handleFileSelect(event)" />
+          <input type="hidden" id="productImage" />
+          <details class="image-url-input">
+            <summary>或手动输入图片 URL</summary>
+            <input type="text" id="productImageUrl" placeholder="https://..." style="margin-top:8px" onchange="handleUrlInput(this.value)" />
+          </details>
         </div>
       </div>
       <div class="form-group">
@@ -563,8 +666,152 @@
       document.getElementById('productPrice').value = product?.price || '';
       document.getElementById('productStock').value = product?.stock ?? '';
       document.getElementById('productImage').value = product?.image || '';
+      document.getElementById('productImageUrl').value = product?.image || '';
       document.getElementById('productDesc').value = product?.description || '';
+      
+      // 重置图片预览
+      resetImageUpload();
+      if (product?.image) {
+        showImagePreview(product.image);
+      }
+      
       document.getElementById('productModal').style.display = 'flex';
+    }
+
+    // ========== 图片上传相关函数 ==========
+    let currentUploadedFilename = null;
+
+    function triggerFileInput() {
+      document.getElementById('imageFile').click();
+    }
+
+    function handleFileSelect(event) {
+      const file = event.target.files[0];
+      if (file) {
+        uploadImage(file);
+      }
+    }
+
+    function handleUrlInput(url) {
+      if (url) {
+        document.getElementById('productImage').value = url;
+        showImagePreview(url);
+      }
+    }
+
+    async function uploadImage(file) {
+      const formData = new FormData();
+      formData.append('image', file);
+
+      const progressContainer = document.getElementById('uploadProgress');
+      const progressBar = document.getElementById('uploadProgressBar');
+      const uploadArea = document.getElementById('imageUploadArea');
+
+      progressContainer.style.display = 'block';
+      progressBar.style.width = '0%';
+
+      try {
+        // 模拟进度
+        let progress = 0;
+        const progressInterval = setInterval(() => {
+          progress += Math.random() * 30;
+          if (progress > 90) progress = 90;
+          progressBar.style.width = progress + '%';
+        }, 100);
+
+        const res = await fetch(`${API_BASE}/api/upload`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` },
+          body: formData
+        });
+
+        clearInterval(progressInterval);
+        progressBar.style.width = '100%';
+
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.message || '上传失败');
+        }
+
+        const data = await res.json();
+        
+        // 保存上传的文件名，方便后续删除
+        currentUploadedFilename = data.filename;
+        
+        // 设置图片值
+        document.getElementById('productImage').value = data.url;
+        document.getElementById('productImageUrl').value = data.url;
+        
+        // 显示预览
+        setTimeout(() => {
+          progressContainer.style.display = 'none';
+          showImagePreview(data.url);
+        }, 300);
+
+      } catch (err) {
+        progressContainer.style.display = 'none';
+        alert('上传失败: ' + err.message);
+      }
+    }
+
+    function showImagePreview(url) {
+      const placeholder = document.getElementById('uploadPlaceholder');
+      const previewContainer = document.getElementById('imagePreviewContainer');
+      const preview = document.getElementById('imagePreview');
+
+      placeholder.style.display = 'none';
+      previewContainer.style.display = 'inline-block';
+      preview.src = url;
+    }
+
+    function removeImage() {
+      resetImageUpload();
+      document.getElementById('productImage').value = '';
+      document.getElementById('productImageUrl').value = '';
+      
+      // 如果是上传的图片，可以从服务器删除
+      if (currentUploadedFilename) {
+        fetch(`${API_BASE}/api/upload/${currentUploadedFilename}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        }).catch(() => {});
+        currentUploadedFilename = null;
+      }
+    }
+
+    function resetImageUpload() {
+      const placeholder = document.getElementById('uploadPlaceholder');
+      const previewContainer = document.getElementById('imagePreviewContainer');
+      const progressContainer = document.getElementById('uploadProgress');
+      const fileInput = document.getElementById('imageFile');
+
+      placeholder.style.display = 'block';
+      previewContainer.style.display = 'none';
+      progressContainer.style.display = 'none';
+      fileInput.value = '';
+      currentUploadedFilename = null;
+    }
+
+    // 拖拽上传
+    const uploadArea = document.getElementById('imageUploadArea');
+    if (uploadArea) {
+      uploadArea.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        uploadArea.classList.add('dragover');
+      });
+
+      uploadArea.addEventListener('dragleave', () => {
+        uploadArea.classList.remove('dragover');
+      });
+
+      uploadArea.addEventListener('drop', (e) => {
+        e.preventDefault();
+        uploadArea.classList.remove('dragover');
+        const file = e.dataTransfer.files[0];
+        if (file && file.type.startsWith('image/')) {
+          uploadImage(file);
+        }
+      });
     }
 
     async function editProduct(id) {
