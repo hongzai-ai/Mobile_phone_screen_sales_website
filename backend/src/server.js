@@ -12,7 +12,7 @@ const __dirname = path.dirname(__filename);
 const app = express();
 
 const PORT = process.env.PORT || 3001;
-const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'changeme-admin-token';
+const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'cNODE_ENV';
 
 app.use(cors());
 app.use(express.json());
@@ -154,8 +154,13 @@ app.get('/api/orders', requireAdmin, async (_req, res) => {
   }
 });
 
-// Fallback for SPA routing if needed
-app.get('*', (_req, res) => {
+// 静态文件会由 express.static 处理，包括 admin.html
+// 仅对非文件请求进行 SPA fallback
+app.get('*', (req, res, next) => {
+  // 如果请求路径包含文件扩展名，跳过 fallback
+  if (req.path.includes('.')) {
+    return next();
+  }
   res.sendFile(path.join(staticDir, 'index.html'));
 });
 
