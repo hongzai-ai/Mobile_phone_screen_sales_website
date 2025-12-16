@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>后台管理 - 屏幕仓</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: #0b1021;
+      color: #e5e7eb;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .container { max-width: 1200px; margin: 0 auto; }
+    h1 { color: #fff; margin-bottom: 20px; }
+    
+    .login-box {
+      background: rgba(15, 23, 42, 0.75);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 16px;
+      padding: 24px;
+      max-width: 400px;
+      margin: 100px auto;
+    }
+    .login-box h2 { color: #fff; margin-bottom: 16px; }
+    .login-box input {
+      width: 100%;
+      padding: 12px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: rgba(255, 255, 255, 0.05);
+      color: #fff;
+      font-size: 16px;
+      margin-bottom: 12px;
+    }
+    .login-box button {
+      width: 100%;
+      padding: 12px;
+      border-radius: 8px;
+      border: none;
+      background: linear-gradient(135deg, #2563eb, #7c3aed);
+      color: #fff;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    
+    .tabs {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .tab {
+      padding: 10px 20px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: #9ca3af;
+      cursor: pointer;
+    }
+    .tab.active {
+      background: linear-gradient(135deg, #2563eb, #7c3aed);
+      color: #fff;
+      border: none;
+    }
+    
+    .panel {
+      background: rgba(15, 23, 42, 0.75);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 16px;
+      padding: 20px;
+    }
+    
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th, td {
+      padding: 12px;
+      text-align: left;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    th { color: #9ca3af; font-weight: 500; }
+    tr:hover { background: rgba(255, 255, 255, 0.02); }
+    
+    .status {
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 13px;
+    }
+    .status.pending { background: #fbbf24; color: #000; }
+    .status.completed { background: #22c55e; color: #000; }
+    .status.cancelled { background: #ef4444; color: #fff; }
+    
+    .total-row { font-weight: 600; color: #a5b4fc; }
+    .logout-btn {
+      padding: 8px 16px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: transparent;
+      color: #9ca3af;
+      cursor: pointer;
+      float: right;
+    }
+    .refresh-btn {
+      padding: 8px 16px;
+      border-radius: 8px;
+      border: none;
+      background: #2563eb;
+      color: #fff;
+      cursor: pointer;
+      margin-left: 12px;
+    }
+    .empty { text-align: center; padding: 40px; color: #9ca3af; }
+    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+
+    @media (max-width: 768px) {
+      table { font-size: 14px; }
+      th, td { padding: 8px; }
+      .tabs { flex-wrap: wrap; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- 登录框 -->
+    <div id="loginBox" class="login-box">
+      <h2>🔐 管理员登录</h2>
+      <input type="password" id="tokenInput" placeholder="请输入管理员令牌 (ADMIN_TOKEN)" />
+      <button onclick="login()">登录</button>
+      <p id="loginError" style="color: #ef4444; margin-top: 12px; display: none;"></p>
+    </div>
+
+    <!-- 管理面板 -->
+    <div id="adminPanel" style="display: none;">
+      <div class="header">
+        <h1>📊 后台管理</h1>
+        <button class="logout-btn" onclick="logout()">退出登录</button>
+      </div>
+
+      <div class="tabs">
+        <button class="tab active" onclick="switchTab('orders')">📦 订单管理</button>
+        <button class="tab" onclick="switchTab('products')">🛒 产品管理</button>
+        <button class="tab" onclick="switchTab('stats')">📈 统计数据</button>
+      </div>
+
+      <!-- 订单面板 -->
+      <div id="ordersPanel" class="panel">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+          <h2>订单列表</h2>
+          <button class="refresh-btn" onclick="loadOrders()">刷新</button>
+        </div>
+        <div id="ordersList"></div>
+      </div>
+
+      <!-- 产品面板 -->
+      <div id="productsPanel" class="panel" style="display: none;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+          <h2>产品列表</h2>
+          <button class="refresh-btn" onclick="loadProducts()">刷新</button>
+        </div>
+        <div id="productsList"></div>
+      </div>
+
+      <!-- 统计面板 -->
+      <div id="statsPanel" class="panel" style="display: none;">
+        <h2>统计数据</h2>
+        <div id="statsContent" style="margin-top: 16px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = window.location.origin;
+    let token = localStorage.getItem('adminToken') || '';
+
+    // 检查是否已登录
+    if (token) {
+      verifyToken();
+    }
+
+    async function verifyToken() {
+      try {
+        const res = await fetch(`${API_BASE}/api/orders`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+          showAdminPanel();
+        } else {
+          localStorage.removeItem('adminToken');
+          token = '';
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    async function login() {
+      token = document.getElementById('tokenInput').value.trim();
+      if (!token) return;
+
+      try {
+        const res = await fetch(`${API_BASE}/api/orders`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+          localStorage.setItem('adminToken', token);
+          showAdminPanel();
+        } else {
+          document.getElementById('loginError').textContent = '令牌无效，请检查后重试';
+          document.getElementById('loginError').style.display = 'block';
+        }
+      } catch (e) {
+        document.getElementById('loginError').textContent = '连接失败，请检查网络';
+        document.getElementById('loginError').style.display = 'block';
+      }
+    }
+
+    function logout() {
+      localStorage.removeItem('adminToken');
+      token = '';
+      document.getElementById('loginBox').style.display = 'block';
+      document.getElementById('adminPanel').style.display = 'none';
+    }
+
+    function showAdminPanel() {
+      document.getElementById('loginBox').style.display = 'none';
+      document.getElementById('adminPanel').style.display = 'block';
+      loadOrders();
+    }
+
+    function switchTab(tab) {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      event.target.classList.add('active');
+      
+      document.getElementById('ordersPanel').style.display = tab === 'orders' ? 'block' : 'none';
+      document.getElementById('productsPanel').style.display = tab === 'products' ? 'block' : 'none';
+      document.getElementById('statsPanel').style.display = tab === 'stats' ? 'block' : 'none';
+
+      if (tab === 'orders') loadOrders();
+      if (tab === 'products') loadProducts();
+      if (tab === 'stats') loadStats();
+    }
+
+    async function loadOrders() {
+      try {
+        const res = await fetch(`${API_BASE}/api/orders`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const orders = await res.json();
+        
+        if (orders.length === 0) {
+          document.getElementById('ordersList').innerHTML = '<div class="empty">暂无订单</div>';
+          return;
+        }
+
+        let totalRevenue = 0;
+        let html = `<table>
+          <thead>
+            <tr>
+              <th>订单号</th>
+              <th>客户</th>
+              <th>电话</th>
+              <th>地址</th>
+              <th>金额</th>
+              <th>状态</th>
+              <th>时间</th>
+            </tr>
+          </thead>
+          <tbody>`;
+
+        orders.forEach(order => {
+          totalRevenue += order.total;
+          const status = order.status || 'pending';
+          const statusText = { pending: '待处理', completed: '已完成', cancelled: '已取消' }[status] || status;
+          html += `<tr>
+            <td>#${order.id}</td>
+            <td>${order.customer_name}</td>
+            <td><a href="tel:${order.phone}" style="color: #60a5fa;">${order.phone}</a></td>
+            <td>${order.address}</td>
+            <td class="total-row">¥${order.total.toFixed(2)}</td>
+            <td><span class="status ${status}">${statusText}</span></td>
+            <td>${new Date(order.created_at).toLocaleString('zh-CN')}</td>
+          </tr>`;
+        });
+
+        html += `</tbody></table>
+          <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1);">
+            <strong>订单总数：</strong>${orders.length} 单 &nbsp;&nbsp;
+            <strong>总营收：</strong><span class="total-row">¥${totalRevenue.toFixed(2)}</span>
+          </div>`;
+
+        document.getElementById('ordersList').innerHTML = html;
+      } catch (e) {
+        document.getElementById('ordersList').innerHTML = '<div class="empty">加载失败</div>';
+      }
+    }
+
+    async function loadProducts() {
+      try {
+        const res = await fetch(`${API_BASE}/api/products`);
+        const products = await res.json();
+
+        if (products.length === 0) {
+          document.getElementById('productsList').innerHTML = '<div class="empty">暂无产品</div>';
+          return;
+        }
+
+        let html = `<table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>产品名称</th>
+              <th>价格</th>
+              <th>库存</th>
+              <th>描述</th>
+            </tr>
+          </thead>
+          <tbody>`;
+
+        products.forEach(p => {
+          const stockColor = p.stock < 10 ? '#ef4444' : '#22c55e';
+          html += `<tr>
+            <td>${p.id}</td>
+            <td>${p.name}</td>
+            <td class="total-row">¥${p.price.toFixed(2)}</td>
+            <td style="color: ${stockColor}">${p.stock}</td>
+            <td style="max-width: 300px; overflow: hidden; text-overflow: ellipsis;">${p.description || '-'}</td>
+          </tr>`;
+        });
+
+        html += '</tbody></table>';
+        document.getElementById('productsList').innerHTML = html;
+      } catch (e) {
+        document.getElementById('productsList').innerHTML = '<div class="empty">加载失败</div>';
+      }
+    }
+
+    async function loadStats() {
+      try {
+        const [ordersRes, productsRes] = await Promise.all([
+          fetch(`${API_BASE}/api/orders`, { headers: { 'Authorization': `Bearer ${token}` } }),
+          fetch(`${API_BASE}/api/products`)
+        ]);
+
+        const orders = await ordersRes.json();
+        const products = await productsRes.json();
+
+        const totalRevenue = orders.reduce((sum, o) => sum + o.total, 0);
+        const totalStock = products.reduce((sum, p) => sum + p.stock, 0);
+        const lowStockProducts = products.filter(p => p.stock < 10);
+
+        const html = `
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+            <div style="background: rgba(37, 99, 235, 0.2); padding: 20px; border-radius: 12px;">
+              <div style="font-size: 32px; font-weight: 700; color: #60a5fa;">${orders.length}</div>
+              <div style="color: #9ca3af;">总订单数</div>
+            </div>
+            <div style="background: rgba(34, 197, 94, 0.2); padding: 20px; border-radius: 12px;">
+              <div style="font-size: 32px; font-weight: 700; color: #4ade80;">¥${totalRevenue.toFixed(2)}</div>
+              <div style="color: #9ca3af;">总营收</div>
+            </div>
+            <div style="background: rgba(168, 85, 247, 0.2); padding: 20px; border-radius: 12px;">
+              <div style="font-size: 32px; font-weight: 700; color: #c084fc;">${products.length}</div>
+              <div style="color: #9ca3af;">产品数量</div>
+            </div>
+            <div style="background: rgba(251, 191, 36, 0.2); padding: 20px; border-radius: 12px;">
+              <div style="font-size: 32px; font-weight: 700; color: #fbbf24;">${totalStock}</div>
+              <div style="color: #9ca3af;">总库存</div>
+            </div>
+          </div>
+          ${lowStockProducts.length > 0 ? `
+            <div style="margin-top: 20px; padding: 16px; background: rgba(239, 68, 68, 0.1); border-radius: 12px; border: 1px solid rgba(239, 68, 68, 0.3);">
+              <strong style="color: #ef4444;">⚠️ 库存预警</strong>
+              <p style="margin-top: 8px; color: #fca5a5;">以下产品库存不足 10：${lowStockProducts.map(p => p.name).join('、')}</p>
+            </div>
+          ` : ''}
+        `;
+
+        document.getElementById('statsContent').innerHTML = html;
+      } catch (e) {
+        document.getElementById('statsContent').innerHTML = '<div class="empty">加载失败</div>';
+      }
+    }
+
+    // Enter 键登录
+    document.getElementById('tokenInput').addEventListener('keyup', (e) => {
+      if (e.key === 'Enter') login();
+    });
+  </script>
+</body>
+</html>
