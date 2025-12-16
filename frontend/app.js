@@ -524,3 +524,212 @@ document.getElementById('payment-modal').addEventListener('click', (e) => {
 // 初始化
 loadProducts();
 loadCart();
+
+// ========== 鼠标踏雪无痕特效 ==========
+(function initSnowTrail() {
+  const canvas = document.getElementById('snow-canvas');
+  if (!canvas) return;
+  
+  const ctx = canvas.getContext('2d');
+  let particles = [];
+  let mouseX = 0, mouseY = 0;
+  let lastMouseX = 0, lastMouseY = 0;
+  let isMoving = false;
+  let moveTimeout;
+  
+  // 设置画布尺寸
+  const resize = () => {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+  };
+  resize();
+  window.addEventListener('resize', resize);
+  
+  // 粒子类
+  class Particle {
+    constructor(x, y) {
+      this.x = x;
+      this.y = y;
+      this.size = Math.random() * 4 + 2;
+      this.speedX = (Math.random() - 0.5) * 2;
+      this.speedY = (Math.random() - 0.5) * 2 + 1;
+      this.life = 1;
+      this.decay = Math.random() * 0.015 + 0.01;
+      this.color = this.getColor();
+      this.rotation = Math.random() * Math.PI * 2;
+      this.rotationSpeed = (Math.random() - 0.5) * 0.1;
+    }
+    
+    getColor() {
+      const colors = [
+        'rgba(255, 255, 255,',
+        'rgba(147, 197, 253,',
+        'rgba(196, 181, 253,',
+        'rgba(165, 243, 252,',
+        'rgba(253, 224, 71,'
+      ];
+      return colors[Math.floor(Math.random() * colors.length)];
+    }
+    
+    update() {
+      this.x += this.speedX;
+      this.y += this.speedY;
+      this.speedY += 0.02; // 重力
+      this.speedX *= 0.99;
+      this.life -= this.decay;
+      this.rotation += this.rotationSpeed;
+      this.size *= 0.99;
+    }
+    
+    draw() {
+      if (this.life <= 0) return;
+      ctx.save();
+      ctx.translate(this.x, this.y);
+      ctx.rotate(this.rotation);
+      ctx.globalAlpha = this.life;
+      
+      // 雪花/星星形状
+      ctx.beginPath();
+      const spikes = 6;
+      const outerRadius = this.size;
+      const innerRadius = this.size * 0.4;
+      
+      for (let i = 0; i < spikes * 2; i++) {
+        const radius = i % 2 === 0 ? outerRadius : innerRadius;
+        const angle = (i * Math.PI) / spikes;
+        const x = Math.cos(angle) * radius;
+        const y = Math.sin(angle) * radius;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+      
+      ctx.fillStyle = this.color + this.life + ')';
+      ctx.shadowColor = this.color + '0.5)';
+      ctx.shadowBlur = 10;
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+  
+  // 创建粒子
+  const createParticles = (x, y, count = 3) => {
+    for (let i = 0; i < count; i++) {
+      particles.push(new Particle(
+        x + (Math.random() - 0.5) * 20,
+        y + (Math.random() - 0.5) * 20
+      ));
+    }
+  };
+  
+  // 鼠标移动监听
+  document.addEventListener('mousemove', (e) => {
+    mouseX = e.clientX;
+    mouseY = e.clientY;
+    isMoving = true;
+    
+    // 计算移动速度
+    const dx = mouseX - lastMouseX;
+    const dy = mouseY - lastMouseY;
+    const speed = Math.sqrt(dx * dx + dy * dy);
+    
+    // 根据速度创建粒子
+    if (speed > 3) {
+      const particleCount = Math.min(Math.floor(speed / 5), 5);
+      createParticles(mouseX, mouseY, particleCount);
+    }
+    
+    lastMouseX = mouseX;
+    lastMouseY = mouseY;
+    
+    clearTimeout(moveTimeout);
+    moveTimeout = setTimeout(() => { isMoving = false; }, 100);
+  });
+  
+  // 点击创建爆炸效果
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('button, a, input, select, textarea')) {
+      for (let i = 0; i < 15; i++) {
+        const p = new Particle(e.clientX, e.clientY);
+        p.speedX = (Math.random() - 0.5) * 8;
+        p.speedY = (Math.random() - 0.5) * 8 - 2;
+        p.size = Math.random() * 6 + 3;
+        particles.push(p);
+      }
+    }
+  });
+  
+  // 动画循环
+  const animate = () => {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // 更新和绘制粒子
+    particles = particles.filter(p => p.life > 0);
+    particles.forEach(p => {
+      p.update();
+      p.draw();
+    });
+    
+    // 限制粒子数量
+    if (particles.length > 200) {
+      particles = particles.slice(-200);
+    }
+    
+    requestAnimationFrame(animate);
+  };
+  
+  animate();
+  
+  // 触摸设备支持
+  document.addEventListener('touchmove', (e) => {
+    const touch = e.touches[0];
+    if (touch) {
+      createParticles(touch.clientX, touch.clientY, 2);
+    }
+  }, { passive: true });
+  
+  document.addEventListener('touchstart', (e) => {
+    const touch = e.touches[0];
+    if (touch) {
+      for (let i = 0; i < 10; i++) {
+        const p = new Particle(touch.clientX, touch.clientY);
+        p.speedX = (Math.random() - 0.5) * 6;
+        p.speedY = (Math.random() - 0.5) * 6;
+        particles.push(p);
+      }
+    }
+  }, { passive: true });
+})();
+
+// ========== 滚动显示动画 ==========
+(function initScrollReveal() {
+  const observerOptions = {
+    threshold: 0.1,
+    rootMargin: '0px 0px -50px 0px'
+  };
+  
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('revealed');
+      }
+    });
+  }, observerOptions);
+  
+  // 观察所有 panel
+  document.querySelectorAll('.panel, .footer').forEach(el => {
+    el.classList.add('scroll-reveal');
+    observer.observe(el);
+  });
+})();
+
+// ========== 平滑滚动增强 ==========
+document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+  anchor.addEventListener('click', function(e) {
+    e.preventDefault();
+    const target = document.querySelector(this.getAttribute('href'));
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  });
+});
